@@ -222,8 +222,11 @@ const nowMinutes = (timeZone) => {
   return hour * 60 + minute;
 };
 
-const timezone = live.timezone || report.timezone || 'Africa/Cairo';
-const reportTime = live.reportTime || report.reportTime || '17:40';
+const timezone = live.timezone || 'Africa/Cairo';
+const reportTime = live.reportTime;
+if (!reportTime) {
+  return [];
+}
 if (nowMinutes(timezone) < minutesFromHhmm(reportTime)) {
   return [];
 }

@@ -279,6 +279,7 @@ export default function AutomationForm() {
                 onChange={(e) => set("reportTime", e.target.value)}
                 required
               />
+              <small className="hint">n8n checks this from the dashboard every 5 minutes. You do not change the workflow clock.</small>
             </label>
           </div>
         </section>

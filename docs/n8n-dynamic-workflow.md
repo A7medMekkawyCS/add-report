@@ -41,8 +41,6 @@ Schedule Trigger (every 5 minutes, Africa/Cairo)
                           → Send failure message
 ```
 
-TODO later: poll every 5 minutes and filter by each automation `reportTime` / `timezone`.
-
 ## Nodes
 
 ### Kept / renamed
