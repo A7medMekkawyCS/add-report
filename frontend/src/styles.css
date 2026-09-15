@@ -146,6 +146,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .field { display: grid; gap: 6px; }
 .field.full { grid-column: 1 / -1; }
 .field span { font-size: 13px; color: var(--muted); font-weight: 600; }
+.field .hint { margin-top: 4px; font-size: 12px; }
 .field input, .field select, .field textarea {
   border: 1px solid var(--line);
   border-radius: 10px;

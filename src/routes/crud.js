@@ -163,7 +163,7 @@ function odooProfilesRouter(prisma) {
 function automationsRouter(prisma) {
   const express = require("express");
   const router = express.Router();
-  const { resolveAutomation } = require("../lib/resolveAutomation");
+  const { resolveAutomation, normalizeGitlabPath } = require("../lib/resolveAutomation");
   const { publicAutomation } = require("../lib/sanitize");
   const include = { user: true, odooProfile: { include: { user: true } } };
 
@@ -175,7 +175,7 @@ function automationsRouter(prisma) {
         return res.status(400).json({ success: false, message: "gitlabProjectPath is required" });
       }
       const rules = await prisma.automationRule.findMany({
-        where: { gitlabProjectPath: path, enabled: true },
+        where: { enabled: true },
         include: { user: true },
       });
       const mapped = rules.map((rule) => ({
@@ -236,7 +236,7 @@ function automationsRouter(prisma) {
           name: String(payload.name).trim(),
           enabled: payload.enabled != null ? Boolean(payload.enabled) : true,
           projectName: String(payload.projectName).trim(),
-          gitlabProjectPath: String(payload.gitlabProjectPath).trim(),
+          gitlabProjectPath: normalizeGitlabPath(payload.gitlabProjectPath),
           gitlabAuthorName: String(payload.gitlabAuthorName).trim(),
           gitlabAuthorEmail: String(payload.gitlabAuthorEmail).trim(),
           odooTaskUrl: String(payload.odooTaskUrl).trim(),
@@ -270,7 +270,11 @@ function automationsRouter(prisma) {
         "reportTime",
       ];
       for (const field of fields) {
-        if (payload[field] != null) data[field] = String(payload[field]).trim();
+        if (payload[field] == null) continue;
+        data[field] =
+          field === "gitlabProjectPath"
+            ? normalizeGitlabPath(payload[field])
+            : String(payload[field]).trim();
       }
       if (payload.userId != null) data.userId = payload.userId;
       if (payload.odooProfileId != null) data.odooProfileId = payload.odooProfileId;

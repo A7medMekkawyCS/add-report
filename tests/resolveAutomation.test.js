@@ -64,6 +64,17 @@ describe("resolveAutomation", () => {
     assert.equal(result.automation.odooTaskUrl, "https://e.aait.sa/odoo/my-tasks/23524");
   });
 
+  it("matches GitLab path case-insensitively", () => {
+    const result = resolveAutomation(rules, {
+      gitlabProjectPath: "a5945/waled-hossam/Zafirra",
+      authorName: "Ahmed Mekawy",
+      authorEmail: "ahmedmekawyxa@gmail.com",
+    });
+    assert.equal(result.matched, true);
+    assert.equal(result.automation.id, 22);
+    assert.equal(result.automation.projectName, "Zafirra");
+  });
+
   it("matches Zafirra + Ahmed as a different task", () => {
     const result = resolveAutomation(rules, {
       gitlabProjectPath: "a5945/waled-hossam/zafirra",

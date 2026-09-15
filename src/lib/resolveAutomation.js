@@ -2,6 +2,15 @@ function normalize(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeGitlabPath(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^https?:\/\/[^/]+\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/^\/+|\/+$/g, "")
+    .toLowerCase();
+}
+
 function publicAutomation(rule) {
   if (!rule) return null;
   return {
@@ -17,18 +26,20 @@ function publicAutomation(rule) {
     timezone: rule.timezone,
     reportTime: rule.reportTime,
     ignoreMergeCommits: rule.ignoreMergeCommits,
+    enabled: rule.enabled !== false,
   };
 }
 
 function resolveAutomation(rules, { gitlabProjectPath, authorName, authorEmail } = {}) {
-  const path = String(gitlabProjectPath || "").trim();
+  const path = normalizeGitlabPath(gitlabProjectPath);
   if (!path) return { matched: false };
 
   const email = normalize(authorEmail);
   const name = normalize(authorName);
 
   const candidates = (rules || []).filter(
-    (rule) => rule.enabled !== false && String(rule.gitlabProjectPath || "").trim() === path
+    (rule) =>
+      rule.enabled !== false && normalizeGitlabPath(rule.gitlabProjectPath) === path
   );
 
   let matched = null;
@@ -45,5 +56,6 @@ function resolveAutomation(rules, { gitlabProjectPath, authorName, authorEmail }
 
 module.exports = {
   normalize,
+  normalizeGitlabPath,
   resolveAutomation,
 };

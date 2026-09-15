@@ -9,6 +9,8 @@ const DATA_TABLE = {
   cachedResultUrl: "/projects/RqZrCeVweVm2uW0F/datatables/JYLh0ZkfFMHptkar",
 };
 
+const RAILWAY_BASE = "https://add-report-production.up.railway.app";
+
 const gmailCreds = {
   gmailOAuth2: {
     id: "ES4H1R3FE2DBhG9u",
@@ -45,6 +47,8 @@ const saveSchema = [
   col("project_name"),
   col("hours", "number"),
   col("notification_email"),
+  col("report_time"),
+  col("timezone"),
   col("processed", "boolean"),
   col("project"),
 ];
@@ -73,7 +77,7 @@ return commits.map((commit) => ({
     url: commit.url,
     author_name: commit.author?.name || '',
     author_email: commit.author?.email || '',
-    repo_path: String(repoPath || '').replace(/^\\/+|\\/+$/g, ''),
+    repo_path: String(repoPath || '').replace(/^\\/+|\\/+$/g, '').toLowerCase(),
     branch,
   },
 }));`;
@@ -108,6 +112,8 @@ return [{
     project_name: automation.projectName,
     hours: Number(automation.hours ?? 7),
     ignore_merge_commits: automation.ignoreMergeCommits ?? true,
+    report_time: automation.reportTime || '17:40',
+    timezone: automation.timezone || 'Africa/Cairo',
     processed: false,
   },
 }];`;
@@ -151,6 +157,8 @@ for (const row of uniqueRows) {
       notificationEmail: row.notification_email || '',
       project: row.project_name,
       hours: Number(row.hours || 7),
+      reportTime: row.report_time || '17:40',
+      timezone: row.timezone || 'Africa/Cairo',
       rows: [],
     };
   }
@@ -170,6 +178,8 @@ const result = Object.values(groups).map((group) => {
       project: group.project,
       date: today,
       hours: group.hours,
+      reportTime: group.reportTime,
+      timezone: group.timezone,
       commits_count: group.rows.length,
       report,
       row_ids: group.rows.map((r) => r.id).filter(Boolean),
@@ -183,6 +193,51 @@ if (result.length === 0) {
   return [{ json: { has_commits: false, date: today, report: '', commits_count: 0 } }];
 }
 return result;`;
+
+const applyDashboardCode = `const report = $('Build Dynamic Reports').item.json;
+const live = $json.data || {};
+
+if (!live.id && !live.userId) {
+  return [];
+}
+if (live.enabled === false) {
+  return [];
+}
+
+const minutesFromHhmm = (value) => {
+  const match = String(value || '17:40').match(/(\\d{1,2}):(\\d{2})/);
+  if (!match) return 17 * 60 + 40;
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
+const nowMinutes = (timeZone) => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timeZone || 'Africa/Cairo',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value);
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value);
+  return hour * 60 + minute;
+};
+
+const timezone = live.timezone || report.timezone || 'Africa/Cairo';
+const reportTime = live.reportTime || report.reportTime || '17:40';
+if (nowMinutes(timezone) < minutesFromHhmm(reportTime)) {
+  return [];
+}
+
+return [{
+  json: {
+    ...report,
+    hours: Number(live.hours ?? report.hours ?? 7),
+    project: live.projectName || report.project,
+    user: live.user?.name || live.userName || report.user,
+    notificationEmail: live.user?.email || live.userEmail || report.notificationEmail,
+    has_commits: true,
+  },
+}];`;
 
 const prepareSubmitCode = `const report = $json;
 return [{
@@ -261,7 +316,7 @@ const workflow = {
     {
       parameters: {
         method: "POST",
-        url: "https://auto-report-production-2ab0.up.railway.app/api/automations/resolve",
+        url: `${RAILWAY_BASE}/api/automations/resolve`,
         sendHeaders: true,
         headerParameters: {
           parameters: [{ name: "X-API-SECRET", value: "={{ $vars.API_SECRET }}" }],
@@ -350,6 +405,8 @@ const workflow = {
             user_name: "={{ $json.user_name }}",
             project_name: "={{ $json.project_name }}",
             hours: "={{ $json.hours }}",
+            report_time: "={{ $json.report_time }}",
+            timezone: "={{ $json.timezone }}",
             notification_email: "={{ $json.notification_email }}",
             processed: "={{ false }}",
             project: "={{ $json.project_name }}",
@@ -369,7 +426,9 @@ const workflow = {
     },
     {
       parameters: {
-        rule: { interval: [{ triggerAtHour: 17, triggerAtMinute: 40 }] },
+        rule: {
+          interval: [{ field: "minutes", minutesInterval: 5 }],
+        },
       },
       type: "n8n-nodes-base.scheduleTrigger",
       typeVersion: 1.4,
@@ -424,6 +483,34 @@ const workflow = {
       name: "If has_commits",
     },
     {
+      parameters: {
+        method: "GET",
+        url: `={{ '${RAILWAY_BASE}/api/automations/' + $json.automationId }}`,
+        sendHeaders: true,
+        headerParameters: {
+          parameters: [{ name: "X-API-SECRET", value: "={{ $vars.API_SECRET }}" }],
+        },
+        options: {
+          response: {
+            response: { neverError: true },
+          },
+        },
+      },
+      type: "n8n-nodes-base.httpRequest",
+      typeVersion: 4.5,
+      position: [80, 784],
+      id: "7c1a2b3d-4e5f-4a61-b007-loadautomation",
+      name: "Load Automation",
+    },
+    {
+      parameters: { jsCode: applyDashboardCode },
+      type: "n8n-nodes-base.code",
+      typeVersion: 2,
+      position: [160, 688],
+      id: "7c1a2b3d-4e5f-4a61-b008-applydashboard",
+      name: "Apply Dashboard Config",
+    },
+    {
       parameters: { jsCode: prepareSubmitCode },
       type: "n8n-nodes-base.code",
       typeVersion: 2,
@@ -434,7 +521,7 @@ const workflow = {
     {
       parameters: {
         method: "POST",
-        url: "https://auto-report-production-2ab0.up.railway.app/submit-report",
+        url: `${RAILWAY_BASE}/submit-report`,
         sendHeaders: true,
         headerParameters: {
           parameters: [{ name: "X-API-SECRET", value: "={{ $vars.API_SECRET }}" }],
@@ -591,7 +678,13 @@ const workflow = {
       main: [[{ node: "If has_commits", type: "main", index: 0 }]],
     },
     "If has_commits": {
-      main: [[{ node: "Prepare Submit Payload", type: "main", index: 0 }], []],
+      main: [[{ node: "Load Automation", type: "main", index: 0 }], []],
+    },
+    "Load Automation": {
+      main: [[{ node: "Apply Dashboard Config", type: "main", index: 0 }]],
+    },
+    "Apply Dashboard Config": {
+      main: [[{ node: "Prepare Submit Payload", type: "main", index: 0 }]],
     },
     "Prepare Submit Payload": {
       main: [[{ node: "Submit to Railway", type: "main", index: 0 }]],

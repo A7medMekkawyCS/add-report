@@ -2,7 +2,7 @@
 
 Import file: `n8n/dynamic-auto-report-workflow.json`
 
-The workflow keeps the same webhook, Data Table, schedule, Gmail credential, and Railway host. Authors, repos, Odoo tasks, and Odoo accounts come from the backend via `automationId`.
+The workflow keeps the same webhook, Data Table, Gmail credential. Railway host is `https://add-report-production.up.railway.app`. Authors, repos, Odoo tasks, hours, and report times come from the dashboard via `automationId`.
 
 Backend duplicate protection is `timesheet_runs` unique on `automationId + date`. n8n no longer uses `report_key`.
 
@@ -23,12 +23,14 @@ Collect GitLab Commits
               → Save processed=false
 
 Branch B
-Schedule Trigger (17:40 Africa/Cairo)
+Schedule Trigger (every 5 minutes, Africa/Cairo)
   → Get processed=false
   → Build Dynamic Reports
   → If has_commits
         false → stop
-        true  → Prepare Submit Payload
+        true  → Load Automation
+              → Apply Dashboard Config (enabled + reportTime)
+              → Prepare Submit Payload
               → Submit to Railway
               → If success (or duplicate)
                     true  → Prepare processed rows

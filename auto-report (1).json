@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const payload = $json.body || $json;\nconst commits = payload.commits || [];\n\nconst homepage = String(payload.repository?.homepage || payload.project?.web_url || '');\nconst repoPath =\n  payload.project?.path_with_namespace ||\n  homepage\n    .replace(/^https?:\\/\\/acgit\\.aait\\.cloud\\//i, '')\n    .replace(/^https?:\\/\\/gitlab\\.com\\//i, '')\n    .replace(/\\.git$/i, '')\n    .replace(/\\/$/, '') ||\n  '';\n\nconst branch = (payload.ref || '').replace('refs/heads/', '');\n\nreturn commits.map((commit) => ({\n  json: {\n    commit_id: commit.id,\n    title: commit.title || commit.message?.split('\\n')[0] || '',\n    message: commit.message || '',\n    timestamp: commit.timestamp,\n    url: commit.url,\n    author_name: commit.author?.name || '',\n    author_email: commit.author?.email || '',\n    repo_path: String(repoPath || '').replace(/^\\/+|\\/+$/g, ''),\n    branch,\n  },\n}));"
+        "jsCode": "const payload = $json.body || $json;\nconst commits = payload.commits || [];\n\nconst homepage = String(payload.repository?.homepage || payload.project?.web_url || '');\nconst repoPath =\n  payload.project?.path_with_namespace ||\n  homepage\n    .replace(/^https?:\\/\\/acgit\\.aait\\.cloud\\//i, '')\n    .replace(/^https?:\\/\\/gitlab\\.com\\//i, '')\n    .replace(/\\.git$/i, '')\n    .replace(/\\/$/, '') ||\n  '';\n\nconst branch = (payload.ref || '').replace('refs/heads/', '');\n\nreturn commits.map((commit) => ({\n  json: {\n    commit_id: commit.id,\n    title: commit.title || commit.message?.split('\\n')[0] || '',\n    message: commit.message || '',\n    timestamp: commit.timestamp,\n    url: commit.url,\n    author_name: commit.author?.name || '',\n    author_email: commit.author?.email || '',\n    repo_path: String(repoPath || '').replace(/^\\/+|\\/+$/g, '').toLowerCase(),\n    branch,\n  },\n}));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -33,7 +33,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://auto-report-production-2ab0.up.railway.app/api/automations/resolve",
+        "url": "https://add-report-production.up.railway.app/api/automations/resolve",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -99,7 +99,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const commit = $('Extract Commit Info').item.json;\nconst automation = $json.automation;\n\nreturn [{\n  json: {\n    ...commit,\n    automation_id: automation.id,\n    user_id: automation.userId,\n    user_name: automation.userName,\n    notification_email: automation.userEmail || '',\n    project_name: automation.projectName,\n    hours: Number(automation.hours ?? 7),\n    ignore_merge_commits: automation.ignoreMergeCommits ?? true,\n    processed: false,\n  },\n}];"
+        "jsCode": "const commit = $('Extract Commit Info').item.json;\nconst automation = $json.automation;\n\nreturn [{\n  json: {\n    ...commit,\n    automation_id: automation.id,\n    user_id: automation.userId,\n    user_name: automation.userName,\n    notification_email: automation.userEmail || '',\n    project_name: automation.projectName,\n    hours: Number(automation.hours ?? 7),\n    ignore_merge_commits: automation.ignoreMergeCommits ?? true,\n    report_time: automation.reportTime || '17:40',\n    timezone: automation.timezone || 'Africa/Cairo',\n    processed: false,\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -177,6 +177,8 @@
             "user_name": "={{ $json.user_name }}",
             "project_name": "={{ $json.project_name }}",
             "hours": "={{ $json.hours }}",
+            "report_time": "={{ $json.report_time }}",
+            "timezone": "={{ $json.timezone }}",
             "notification_email": "={{ $json.notification_email }}",
             "processed": "={{ false }}",
             "project": "={{ $json.project_name }}"
@@ -324,6 +326,26 @@
               "removed": false
             },
             {
+              "id": "report_time",
+              "displayName": "report_time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "timezone",
+              "displayName": "timezone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
               "id": "processed",
               "displayName": "processed",
               "required": false,
@@ -363,8 +385,8 @@
         "rule": {
           "interval": [
             {
-              "triggerAtHour": 17,
-              "triggerAtMinute": 40
+              "field": "minutes",
+              "minutesInterval": 5
             }
           ]
         }
@@ -410,7 +432,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const rows = $input.all()\n  .map((i) => i.json)\n  .filter((row) => row.processed === false && row.automation_id);\n\nconst cairoDate = (value) => {\n  return new Intl.DateTimeFormat('en-CA', {\n    timeZone: 'Africa/Cairo',\n    year: 'numeric',\n    month: '2-digit',\n    day: '2-digit',\n  }).format(new Date(value));\n};\n\nconst today = cairoDate(new Date());\n\nconst todayRows = rows.filter((row) => {\n  if (!row.timestamp) return false;\n  return cairoDate(row.timestamp) === today;\n});\n\nconst dedupeMap = new Map();\nfor (const row of todayRows) {\n  const key = `${row.automation_id}:${row.commit_id || row.url}`;\n  if (!dedupeMap.has(key)) dedupeMap.set(key, row);\n}\n\nconst uniqueRows = [...dedupeMap.values()];\nconst groups = {};\n\nfor (const row of uniqueRows) {\n  const key = String(row.automation_id);\n  if (!groups[key]) {\n    groups[key] = {\n      automationId: row.automation_id,\n      userId: row.user_id,\n      user: row.user_name,\n      notificationEmail: row.notification_email || '',\n      project: row.project_name,\n      hours: Number(row.hours || 7),\n      rows: [],\n    };\n  }\n  groups[key].rows.push(row);\n}\n\nconst result = Object.values(groups).map((group) => {\n  const report = group.rows\n    .map((row, index) => `${index + 1}. ${row.title}`)\n    .join('\\n');\n  return {\n    json: {\n      automationId: group.automationId,\n      userId: group.userId,\n      user: group.user,\n      notificationEmail: group.notificationEmail,\n      project: group.project,\n      date: today,\n      hours: group.hours,\n      commits_count: group.rows.length,\n      report,\n      row_ids: group.rows.map((r) => r.id).filter(Boolean),\n      commit_ids: group.rows.map((r) => r.commit_id).filter(Boolean),\n      has_commits: group.rows.length > 0,\n    },\n  };\n});\n\nif (result.length === 0) {\n  return [{ json: { has_commits: false, date: today, report: '', commits_count: 0 } }];\n}\nreturn result;"
+        "jsCode": "const rows = $input.all()\n  .map((i) => i.json)\n  .filter((row) => row.processed === false && row.automation_id);\n\nconst cairoDate = (value) => {\n  return new Intl.DateTimeFormat('en-CA', {\n    timeZone: 'Africa/Cairo',\n    year: 'numeric',\n    month: '2-digit',\n    day: '2-digit',\n  }).format(new Date(value));\n};\n\nconst today = cairoDate(new Date());\n\nconst todayRows = rows.filter((row) => {\n  if (!row.timestamp) return false;\n  return cairoDate(row.timestamp) === today;\n});\n\nconst dedupeMap = new Map();\nfor (const row of todayRows) {\n  const key = `${row.automation_id}:${row.commit_id || row.url}`;\n  if (!dedupeMap.has(key)) dedupeMap.set(key, row);\n}\n\nconst uniqueRows = [...dedupeMap.values()];\nconst groups = {};\n\nfor (const row of uniqueRows) {\n  const key = String(row.automation_id);\n  if (!groups[key]) {\n    groups[key] = {\n      automationId: row.automation_id,\n      userId: row.user_id,\n      user: row.user_name,\n      notificationEmail: row.notification_email || '',\n      project: row.project_name,\n      hours: Number(row.hours || 7),\n      reportTime: row.report_time || '17:40',\n      timezone: row.timezone || 'Africa/Cairo',\n      rows: [],\n    };\n  }\n  groups[key].rows.push(row);\n}\n\nconst result = Object.values(groups).map((group) => {\n  const report = group.rows\n    .map((row, index) => `${index + 1}. ${row.title}`)\n    .join('\\n');\n  return {\n    json: {\n      automationId: group.automationId,\n      userId: group.userId,\n      user: group.user,\n      notificationEmail: group.notificationEmail,\n      project: group.project,\n      date: today,\n      hours: group.hours,\n      reportTime: group.reportTime,\n      timezone: group.timezone,\n      commits_count: group.rows.length,\n      report,\n      row_ids: group.rows.map((r) => r.id).filter(Boolean),\n      commit_ids: group.rows.map((r) => r.commit_id).filter(Boolean),\n      has_commits: group.rows.length > 0,\n    },\n  };\n});\n\nif (result.length === 0) {\n  return [{ json: { has_commits: false, date: today, report: '', commits_count: 0 } }];\n}\nreturn result;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -457,6 +479,49 @@
     },
     {
       "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://add-report-production.up.railway.app/api/automations/' + $json.automationId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-SECRET",
+              "value": "={{ $vars.API_SECRET }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        80,
+        784
+      ],
+      "id": "7c1a2b3d-4e5f-4a61-b007-loadautomation",
+      "name": "Load Automation"
+    },
+    {
+      "parameters": {
+        "jsCode": "const report = $('Build Dynamic Reports').item.json;\nconst live = $json.data || {};\n\nif (!live.id && !live.userId) {\n  return [];\n}\nif (live.enabled === false) {\n  return [];\n}\n\nconst minutesFromHhmm = (value) => {\n  const match = String(value || '17:40').match(/(\\d{1,2}):(\\d{2})/);\n  if (!match) return 17 * 60 + 40;\n  return Number(match[1]) * 60 + Number(match[2]);\n};\n\nconst nowMinutes = (timeZone) => {\n  const parts = new Intl.DateTimeFormat('en-GB', {\n    timeZone: timeZone || 'Africa/Cairo',\n    hour: '2-digit',\n    minute: '2-digit',\n    hourCycle: 'h23',\n  }).formatToParts(new Date());\n  const hour = Number(parts.find((part) => part.type === 'hour')?.value);\n  const minute = Number(parts.find((part) => part.type === 'minute')?.value);\n  return hour * 60 + minute;\n};\n\nconst timezone = live.timezone || report.timezone || 'Africa/Cairo';\nconst reportTime = live.reportTime || report.reportTime || '17:40';\nif (nowMinutes(timezone) < minutesFromHhmm(reportTime)) {\n  return [];\n}\n\nreturn [{\n  json: {\n    ...report,\n    hours: Number(live.hours ?? report.hours ?? 7),\n    project: live.projectName || report.project,\n    user: live.user?.name || live.userName || report.user,\n    notificationEmail: live.user?.email || live.userEmail || report.notificationEmail,\n    has_commits: true,\n  },\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        688
+      ],
+      "id": "7c1a2b3d-4e5f-4a61-b008-applydashboard",
+      "name": "Apply Dashboard Config"
+    },
+    {
+      "parameters": {
         "jsCode": "const report = $json;\nreturn [{\n  json: {\n    automationId: report.automationId,\n    report: report.report,\n    date: report.date,\n    row_ids: report.row_ids || [],\n    commit_ids: report.commit_ids || [],\n    user: report.user,\n    notificationEmail: report.notificationEmail || '',\n    project: report.project,\n    hours: report.hours,\n    commits_count: report.commits_count,\n    has_commits: report.has_commits,\n  },\n}];"
       },
       "type": "n8n-nodes-base.code",
@@ -471,7 +536,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://auto-report-production-2ab0.up.railway.app/submit-report",
+        "url": "https://add-report-production.up.railway.app/submit-report",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -807,12 +872,34 @@
       "main": [
         [
           {
-            "node": "Prepare Submit Payload",
+            "node": "Load Automation",
             "type": "main",
             "index": 0
           }
         ],
         []
+      ]
+    },
+    "Load Automation": {
+      "main": [
+        [
+          {
+            "node": "Apply Dashboard Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Dashboard Config": {
+      "main": [
+        [
+          {
+            "node": "Prepare Submit Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Prepare Submit Payload": {

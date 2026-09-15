@@ -185,9 +185,10 @@ export default function AutomationForm() {
               <input
                 value={form.gitlabProjectPath}
                 onChange={(e) => set("gitlabProjectPath", e.target.value)}
-                placeholder="a5945/mohamed-emad/haki"
+                placeholder="a5945/waled-hossam/zafirra"
                 required
               />
+              <small className="hint">Same value as GitLab path_with_namespace. Case does not matter.</small>
             </label>
             <label className="field">
               <span>GitLab author name</span>
