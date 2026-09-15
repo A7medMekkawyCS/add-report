@@ -259,31 +259,6 @@ export default function AutomationForm() {
           </div>
         </section>
 
-        <section className="section">
-          <h2>Schedule</h2>
-          <div className="grid">
-            <label className="field">
-              <span>Timezone</span>
-              <input
-                value={form.timezone}
-                onChange={(e) => set("timezone", e.target.value)}
-                placeholder="Africa/Cairo"
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Report time</span>
-              <input
-                type="time"
-                value={form.reportTime}
-                onChange={(e) => set("reportTime", e.target.value)}
-                required
-              />
-              <small className="hint">n8n checks this from the dashboard every 5 minutes. You do not change the workflow clock.</small>
-            </label>
-          </div>
-        </section>
-
         {error ? <p className="error">{error}</p> : null}
         <button type="submit">{editing ? "Save automation" : "Create automation"}</button>
       </form>

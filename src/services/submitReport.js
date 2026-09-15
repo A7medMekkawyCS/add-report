@@ -1,6 +1,7 @@
 const { decryptSecret } = require("../crypto/secrets");
 const { extractTaskId } = require("../lib/taskId");
 const { reportHash } = require("../lib/hash");
+const { evaluateCalendar, loadSettings } = require("../lib/schedule");
 
 function normalizeReport(report) {
   return String(report).replace(/\\n/g, "\n");
@@ -46,6 +47,21 @@ async function submitByAutomation({ req, res, prisma, submitTimesheet, mutex }) 
   }
   if (!automation.odooProfile || automation.odooProfile.enabled === false) {
     return res.status(400).json({ success: false, message: "Odoo profile is missing or disabled" });
+  }
+
+  const settings = await loadSettings(prisma);
+  const when = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T12:00:00+03:00`) : new Date();
+  const calendar = evaluateCalendar(settings, when);
+  if (!calendar.canRunToday) {
+    return res.status(200).json({
+      success: false,
+      skipped: true,
+      reason: calendar.reason,
+      message:
+        calendar.reason === "holiday"
+          ? `Skipped holiday${calendar.holidayName ? `: ${calendar.holidayName}` : ""}`
+          : "Skipped weekend / off day",
+    });
   }
 
   const existing = await prisma.timesheetRun.findUnique({

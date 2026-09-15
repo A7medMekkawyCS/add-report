@@ -203,6 +203,9 @@ if (!live.id && !live.userId) {
 if (live.enabled === false) {
   return [];
 }
+if (live.canRunToday === false) {
+  return [];
+}
 
 const minutesFromHhmm = (value) => {
   const match = String(value || '17:40').match(/(\\d{1,2}):(\\d{2})/);

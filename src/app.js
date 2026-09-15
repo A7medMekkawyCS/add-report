@@ -1,7 +1,7 @@
 const path = require("path");
 const express = require("express");
 const { requireApiSecret } = require("./middleware/requireApiSecret");
-const { usersRouter, odooProfilesRouter, automationsRouter } = require("./routes/crud");
+const { usersRouter, odooProfilesRouter, automationsRouter, settingsRouter } = require("./routes/crud");
 const { handleSubmitReport } = require("./services/submitReport");
 
 function createApp(deps = {}) {
@@ -35,6 +35,7 @@ function createApp(deps = {}) {
   app.use("/api/users", requireApiSecret, usersRouter(prisma));
   app.use("/api/odoo-profiles", requireApiSecret, odooProfilesRouter(prisma));
   app.use("/api/automations", requireApiSecret, automationsRouter(prisma));
+  app.use("/api/settings", requireApiSecret, settingsRouter(prisma));
 
   const frontendDist = path.join(__dirname, "..", "frontend", "dist");
   app.use(express.static(frontendDist));

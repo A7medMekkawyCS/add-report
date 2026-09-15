@@ -165,6 +165,7 @@ function automationsRouter(prisma) {
   const router = express.Router();
   const { resolveAutomation, normalizeGitlabPath } = require("../lib/resolveAutomation");
   const { publicAutomation } = require("../lib/sanitize");
+  const { evaluateCalendar, loadSettings } = require("../lib/schedule");
   const include = { user: true, odooProfile: { include: { user: true } } };
 
   router.post("/resolve", async (req, res) => {
@@ -203,7 +204,18 @@ function automationsRouter(prisma) {
       const id = req.params.id;
       const rule = await prisma.automationRule.findUnique({ where: { id }, include });
       if (!rule) return res.status(404).json({ success: false, message: "Not found" });
-      return res.json({ success: true, data: publicAutomation(rule) });
+      const settings = await loadSettings(prisma);
+      const calendar = evaluateCalendar(settings);
+      return res.json({
+        success: true,
+        data: {
+          ...publicAutomation(rule),
+          reportTime: calendar.reportTime,
+          timezone: calendar.timezone,
+          canRunToday: calendar.canRunToday,
+          skipReason: calendar.reason,
+        },
+      });
     } catch (err) {
       return handlePrismaError(err, res);
     }
@@ -303,9 +315,60 @@ function automationsRouter(prisma) {
   return router;
 }
 
+function settingsRouter(prisma) {
+  const express = require("express");
+  const { publicSettings, defaultSettings } = require("../lib/schedule");
+  const router = express.Router();
+
+  router.get("/", async (_req, res) => {
+    try {
+      const row = prisma.settings?.findFirst ? await prisma.settings.findFirst() : null;
+      return res.json({ success: true, data: publicSettings(row) });
+    } catch (err) {
+      return handlePrismaError(err, res);
+    }
+  });
+
+  router.put("/", async (req, res) => {
+    try {
+      const payload = req.body || {};
+      const current = publicSettings(
+        prisma.settings?.findFirst ? await prisma.settings.findFirst() : defaultSettings()
+      );
+      const holidays = Array.isArray(payload.holidays)
+        ? payload.holidays
+            .map((item) => ({
+              date: String(item.date || "").trim(),
+              name: String(item.name || "").trim(),
+            }))
+            .filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.date))
+        : current.holidays;
+      const weeklyOffDays = Array.isArray(payload.weeklyOffDays)
+        ? [...new Set(payload.weeklyOffDays.map(Number).filter((day) => day >= 0 && day <= 6))]
+        : current.weeklyOffDays;
+      const data = {
+        timezone: payload.timezone ? String(payload.timezone).trim() : current.timezone,
+        reportTime: payload.reportTime ? String(payload.reportTime).trim() : current.reportTime,
+        weeklyOffDays,
+        holidays,
+      };
+      if (!prisma.settings?.update) {
+        return res.json({ success: true, data });
+      }
+      const saved = await prisma.settings.update({ data });
+      return res.json({ success: true, data: publicSettings(saved) });
+    } catch (err) {
+      return handlePrismaError(err, res);
+    }
+  });
+
+  return router;
+}
+
 module.exports = {
   usersRouter,
   odooProfilesRouter,
   automationsRouter,
+  settingsRouter,
   handlePrismaError,
 };

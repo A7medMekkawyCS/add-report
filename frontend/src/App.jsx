@@ -6,6 +6,7 @@ import OdooProfiles from "./pages/OdooProfiles.jsx";
 import OdooProfileForm from "./pages/OdooProfileForm.jsx";
 import Automations from "./pages/Automations.jsx";
 import AutomationForm from "./pages/AutomationForm.jsx";
+import Settings from "./pages/Settings.jsx";
 
 function RequireAuth({ children }) {
   if (!getSecret()) return <Navigate to="/login" replace />;
@@ -28,6 +29,7 @@ function Shell({ children }) {
           <NavLink to="/automations">Automations</NavLink>
           <NavLink to="/users">Users</NavLink>
           <NavLink to="/odoo-profiles">Odoo Profiles</NavLink>
+          <NavLink to="/settings">Schedule</NavLink>
         </nav>
         <button
           className="ghost logout"
@@ -62,6 +64,7 @@ export default function App() {
                 <Route path="/automations" element={<Automations />} />
                 <Route path="/automations/new" element={<AutomationForm />} />
                 <Route path="/automations/:id/edit" element={<AutomationForm />} />
+                <Route path="/settings" element={<Settings />} />
               </Routes>
             </Shell>
           </RequireAuth>

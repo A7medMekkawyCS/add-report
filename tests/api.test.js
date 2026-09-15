@@ -312,4 +312,35 @@ describe("API", () => {
     assert.equal(res.body.deprecated, true);
     assert.equal(submitted[0].taskUrl, "https://e.aait.sa/odoo/my-tasks/23524");
   });
+
+  it("skips submit-report on a holiday", async () => {
+    prisma._state.settings.holidays = [{ date: "2026-09-15", name: "Test holiday" }];
+    const res = await request(app)
+      .post("/submit-report")
+      .set("X-API-SECRET", "test-secret")
+      .send({
+        automationId: 17,
+        report: "1. Should skip",
+        date: "2026-09-15",
+      });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.skipped, true);
+    assert.equal(res.body.success, false);
+    assert.equal(submitted.length, 0);
+  });
+
+  it("reads and saves schedule settings", async () => {
+    const res = await request(app)
+      .put("/api/settings")
+      .set("X-API-SECRET", "test-secret")
+      .send({
+        reportTime: "18:00",
+        timezone: "Africa/Cairo",
+        weeklyOffDays: [5, 6],
+        holidays: [{ date: "2026-10-06", name: "Armed Forces Day" }],
+      });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.reportTime, "18:00");
+    assert.equal(res.body.data.holidays[0].date, "2026-10-06");
+  });
 });

@@ -23,6 +23,14 @@ function createMemoryPrisma(seed = {}) {
     odooProfiles: seed.odooProfiles ? clone(seed.odooProfiles) : [],
     automationRules: seed.automationRules ? clone(seed.automationRules) : [],
     timesheetRuns: seed.timesheetRuns ? clone(seed.timesheetRuns) : [],
+    settings: seed.settings
+      ? clone(seed.settings)
+      : {
+          timezone: "Africa/Cairo",
+          reportTime: "17:40",
+          weeklyOffDays: [5, 6],
+          holidays: [],
+        },
   };
   let ids = {
     users: Math.max(0, ...state.users.map((r) => r.id)),
@@ -253,6 +261,15 @@ function createMemoryPrisma(seed = {}) {
           return this.update({ where, data: update });
         }
         return this.create({ data: create });
+      },
+    },
+    settings: {
+      async findFirst() {
+        return clone(state.settings);
+      },
+      async update({ data }) {
+        Object.assign(state.settings, data, { updatedAt: new Date().toISOString() });
+        return clone(state.settings);
       },
     },
     _state: state,

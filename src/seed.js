@@ -5,7 +5,9 @@ const { connectDb } = require("./db/mongo");
 const User = require("./models/userModel");
 const OdooProfile = require("./models/odooProfileModel");
 const AutomationRule = require("./models/automationRuleModel");
+const Settings = require("./models/settingsModel");
 const { encryptSecret } = require("./crypto/secrets");
+const { defaultSettings } = require("./lib/schedule");
 
 async function upsertUser({ name, email }) {
   return User.findOneAndUpdate(
@@ -120,6 +122,12 @@ async function main() {
     gitlabAuthorEmail: "mohamed@example.com",
     odooTaskUrl: "https://e.aait.sa/odoo/my-tasks/28218",
   });
+
+  await Settings.findOneAndUpdate(
+    { key: "global" },
+    { $setOnInsert: { key: "global", ...defaultSettings() } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
 
   console.log("Seed complete. Replace placeholder Odoo passwords from the dashboard.");
 }

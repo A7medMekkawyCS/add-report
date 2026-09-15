@@ -65,7 +65,6 @@ export default function Automations() {
                 <th>Odoo Profile</th>
                 <th>Odoo Task</th>
                 <th>Hours</th>
-                <th>Schedule</th>
                 <th>Enabled</th>
                 <th>Actions</th>
               </tr>
@@ -82,9 +81,6 @@ export default function Automations() {
                   <td>{rule.odooProfile?.profileKey || rule.odooProfileId}</td>
                   <td>{taskLabel(rule.odooTaskUrl)}</td>
                   <td>{rule.hours}h</td>
-                  <td>
-                    {rule.reportTime} {rule.timezone}
-                  </td>
                   <td>
                     <span className={`badge ${rule.enabled ? "on" : "off"}`}>
                       {rule.enabled ? "Active" : "Disabled"}

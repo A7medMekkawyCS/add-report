@@ -2,6 +2,8 @@ const User = require("../models/userModel");
 const OdooProfile = require("../models/odooProfileModel");
 const AutomationRule = require("../models/automationRuleModel");
 const TimesheetRun = require("../models/timesheetRunModel");
+const Settings = require("../models/settingsModel");
+const { defaultSettings } = require("../lib/schedule");
 
 function prismaError(code, message) {
   const err = new Error(message);
@@ -225,6 +227,23 @@ const mongoAdapter = {
       const existing = await this.findUnique({ where });
       if (existing) return this.update({ where, data: update });
       return this.create({ data: create });
+    },
+  },
+  settings: {
+    async findFirst() {
+      let row = await Settings.findOne({ key: "global" });
+      if (!row) {
+        row = await Settings.create({ key: "global", ...defaultSettings() });
+      }
+      return jsonDoc(row);
+    },
+    async update({ data }) {
+      const row = await Settings.findOneAndUpdate(
+        { key: "global" },
+        { $set: { key: "global", ...data } },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+      );
+      return jsonDoc(row);
     },
   },
 };
