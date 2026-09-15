@@ -301,21 +301,49 @@ async function installBrowserTabHelpers(page) {
           w,
           "timesheets",
           "timesheet",
-          "ساعات",
-          "الساعات",
+          "hours spent",
+          "الجداول الزمنية",
+          "الجدول الزمني",
+          "سجلات الدوام",
           "سجل الوقت",
           "جداول البيانات",
+          "ساعات العمل",
+          "ساعات",
+          "الساعات",
           "جداول",
-          "بيانات",
         ];
       }
 
       function tabTextMatches(rawText, wanted) {
         const raw = String(rawText || "").trim().toLowerCase();
-        const text = raw.replace(/\s*\d+\s*$/, "").trim();
-        return tabAliases(wanted).some(
-          (t) => raw === t || raw.startsWith(t + " ") || text === t || text.startsWith(t)
+        const text = raw
+          .replace(/\s*\(\d+\)\s*$/, "")
+          .replace(/\s*\d+\s*$/, "")
+          .trim();
+        const hay = `${raw} ${text}`;
+        if (/\btimesheets?\b/.test(hay)) return true;
+        const phrases = tabAliases(wanted).filter((t) => t && t.length >= 4);
+        if (phrases.some((t) => hay.includes(t))) return true;
+        return ["ساعات", "الساعات", "جداول"].some(
+          (t) => text === t || text.startsWith(t + " ") || raw.startsWith(t)
         );
+      }
+
+      function clickMoreNotebookMenu() {
+        const labels = ["more", "المزيد", "أخرى", "other"];
+        const nodes = Array.from(
+          document.querySelectorAll(
+            ".o_notebook .nav-link, .o_notebook button, .o_notebook .dropdown-toggle, .nav-tabs .dropdown-toggle, .o_notebook [role='tab']"
+          )
+        );
+        const el = nodes.find((node) => {
+          const t = (node.textContent || "").trim().toLowerCase();
+          if (!t || t.length > 24) return false;
+          return labels.some((lbl) => t === lbl || t.startsWith(lbl + " ") || t.startsWith(lbl));
+        });
+        if (!el) return false;
+        el.click();
+        return true;
       }
 
       function elementOwnText(el) {
@@ -446,17 +474,26 @@ async function installBrowserTabHelpers(page) {
       }
 
       function clickTabByLabel(wanted) {
-        const targets = findTabClickTargets(wanted);
+        let targets = findTabClickTargets(wanted);
         if (!targets.length) {
-          return { found: false, tabs: listVisibleTabLabels() };
+          clickMoreNotebookMenu();
+          targets = findTabClickTargets(wanted);
         }
-        for (const target of targets) {
+        if (!targets.length) {
+          return { found: false, tabs: listVisibleTabLabels(), openedMore: true };
+        }
+        const visible = targets.find((target) => {
           const rect = target.getBoundingClientRect();
-          if (rect.width < 2 || rect.height < 2) continue;
-          dispatchClick(target);
-          return { found: true, active: isTabActive(target), text: target.textContent.trim() };
-        }
-        return { found: false, tabs: listVisibleTabLabels() };
+          return rect.width >= 2 && rect.height >= 2;
+        });
+        const target = visible || targets[0];
+        dispatchClick(target);
+        return {
+          found: true,
+          active: isTabActive(target),
+          text: (target.textContent || "").trim(),
+          hidden: !visible,
+        };
       }
 
       return {
@@ -468,6 +505,7 @@ async function installBrowserTabHelpers(page) {
         isTabActive,
         listVisibleTabLabels,
         clickTabByLabel,
+        clickMoreNotebookMenu,
       };
     };
 
@@ -550,7 +588,11 @@ async function openNotebookTab(page, label) {
       if (result.tabs?.length) {
         console.log(`[ODOO] Visible tabs: ${result.tabs.join(" | ")}`);
       }
-      await page.evaluate(() => window.scrollTo(0, Math.min(document.body.scrollHeight, 600)));
+      await page.evaluate(() => {
+        const h = window.__odooTabHelpers();
+        if (typeof h.clickMoreNotebookMenu === "function") h.clickMoreNotebookMenu();
+        window.scrollTo(0, Math.min(document.body.scrollHeight, 800));
+      });
       await sleep(1000);
       continue;
     }
@@ -612,8 +654,11 @@ async function openNotebookTab(page, label) {
     return;
   }
 
-  await logVisibleTabs(page);
-  throw new Error(`Could not activate notebook tab "${label}".`);
+  const tabs = await page.evaluate(() => window.__odooTabHelpers().listVisibleTabLabels());
+  console.log("[ODOO] Visible tabs on page:", tabs.join(" | ") || "(none)");
+  throw new Error(
+    `Could not activate notebook tab "${label}". Visible tabs: ${tabs.join(" | ") || "(none)"}`
+  );
 }
 
 async function waitForTimesheetWidget(page, fieldName) {
