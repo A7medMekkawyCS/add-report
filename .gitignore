@@ -1,0 +1,8 @@
+.env
+node_modules/
+.puppeteer-profile/
+error-screenshot.png
+*.log
+frontend/node_modules/
+frontend/dist/
+.prisma/
